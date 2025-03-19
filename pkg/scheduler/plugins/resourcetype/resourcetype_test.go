@@ -1,0 +1,115 @@
+// Copyright 2025 NVIDIA CORPORATION
+// SPDX-License-Identifier: Apache-2.0
+
+package resourcetype_test
+
+import (
+	"fmt"
+	"testing"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/NVIDIA/KAI-scheduler/pkg/scheduler/api"
+	"github.com/NVIDIA/KAI-scheduler/pkg/scheduler/api/node_info"
+	"github.com/NVIDIA/KAI-scheduler/pkg/scheduler/api/pod_info"
+	"github.com/NVIDIA/KAI-scheduler/pkg/scheduler/api/resource_info"
+	"github.com/NVIDIA/KAI-scheduler/pkg/scheduler/cache"
+	"github.com/NVIDIA/KAI-scheduler/pkg/scheduler/cache/cluster_info"
+	"github.com/NVIDIA/KAI-scheduler/pkg/scheduler/framework"
+	"github.com/NVIDIA/KAI-scheduler/pkg/scheduler/plugins/resourcetype"
+	"github.com/NVIDIA/KAI-scheduler/pkg/scheduler/plugins/scores"
+	"github.com/NVIDIA/KAI-scheduler/pkg/scheduler/test_utils/nodes_fake"
+	"github.com/NVIDIA/KAI-scheduler/pkg/scheduler/test_utils/resources_fake"
+)
+
+func TestResourceTypePlugin(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "CPU Only Preference Plugin test")
+}
+
+var _ = Describe("resourceType", func() {
+	Describe("resourceTypePlugin", func() {
+		Describe("nodeOrderFn", func() {
+			var (
+				pp          framework.Plugin
+				nodeOrderFn api.NodeOrderFn
+				ssn         framework.Session
+			)
+			BeforeEach(func() {
+				pp = resourcetype.New(map[string]string{})
+				ssn = framework.Session{}
+
+				Expect(ssn.NodeOrderFns).To(HaveLen(0), "NodeOrderFns should be empty")
+				pp.OnSessionOpen(&ssn)
+				Expect(ssn.NodeOrderFns).To(HaveLen(1), "NodeOrderFns should have one element")
+				nodeOrderFn = ssn.NodeOrderFns[len(ssn.NodeOrderFns)-1]
+			})
+
+			Context("scoring a node for a task", func() {
+				It("Returns 10 score if both task is CPU only and node doesn't have GPUs", func() {
+					task := createFakeTask("task-1", 0, 500)
+					node := createFakeNode("node-1", 0, map[v1.ResourceName]int{})
+					score, _ := nodeOrderFn(task, node)
+					Expect(score).To(Equal(float64(scores.ResourceType)))
+				})
+
+				// even though we expect this to fall on filtering
+				It("Returns 0 score if task is NOT CPU only and node doesn't have GPUs", func() {
+					task := createFakeTask("task-1", 2, 500)
+					node := createFakeNode("node-1", 0, map[v1.ResourceName]int{})
+					score, _ := nodeOrderFn(task, node)
+					Expect(score).To(Equal(0.0))
+				})
+				It("Returns 0 score if task is CPU only and node has GPUs", func() {
+					task := createFakeTask("task-1", 0, 500)
+					node := createFakeNode("node-1", 1, map[v1.ResourceName]int{})
+					score, _ := nodeOrderFn(task, node)
+					Expect(score).To(Equal(0.0))
+				})
+				It("Returns 0 score if task is CPU only and node has MIG GPU", func() {
+					task := createFakeTask("task-1", 0, 500)
+					node := createFakeNode("node-1", 0, map[v1.ResourceName]int{
+						"nvidia.com/mig-1g.5gb": 1,
+					})
+					score, _ := nodeOrderFn(task, node)
+					Expect(score).To(Equal(0.0))
+				})
+				It("Returns 0 score if task is NOT CPU only and node has GPUs", func() {
+					task := createFakeTask("task1", 1, 500)
+					node := createFakeNode("node1", 1, map[v1.ResourceName]int{})
+					score, _ := nodeOrderFn(task, node)
+					Expect(score).To(Equal(0.0))
+				})
+			})
+		})
+	})
+})
+
+func createFakeTask(taskName string, gpu float64, cpu float64) *pod_info.PodInfo {
+	return &pod_info.PodInfo{
+		Name:   taskName,
+		ResReq: createResource(gpu, cpu),
+		Pod: &v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				CreationTimestamp: metav1.Now(),
+			},
+		},
+	}
+}
+
+func createFakeNode(nodeName string, capacityGPU int, migProfiles map[v1.ResourceName]int) *node_info.NodeInfo {
+	gpuString := fmt.Sprintf("%d", capacityGPU)
+	cpuString := "2000"
+	nodeResource := resources_fake.BuildResourceList(&cpuString, nil, &gpuString, migProfiles)
+	node := nodes_fake.BuildNode(nodeName, nodeResource, nodeResource)
+	clusterPodAffinityInfo := cache.NewK8sClusterPodAffinityInfo()
+	podAffinityInfo := cluster_info.NewK8sNodePodAffinityInfo(node, clusterPodAffinityInfo)
+	return node_info.NewNodeInfo(node, podAffinityInfo)
+}
+
+func createResource(gpu float64, cpu float64) *resource_info.ResourceRequirements {
+	return resource_info.NewResourceRequirements(gpu, cpu, 0)
+}

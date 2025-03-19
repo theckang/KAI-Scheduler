@@ -1,0 +1,47 @@
+# Copyright 2025 NVIDIA CORPORATION
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: "kubeflow.org/v1"
+kind: PyTorchJob
+metadata:
+  name: elastic-example-imagenet
+spec:
+  elasticPolicy:
+    rdzvBackend: c10d
+    minReplicas: 1
+    maxReplicas: 3
+    maxRestarts: 100
+    metrics:
+      - type: Resource
+        resource:
+          name: cpu
+          target:
+            type: Utilization
+            averageUtilization: 80
+  pytorchReplicaSpecs:
+    Worker:
+      replicas: 2
+      restartPolicy: OnFailure
+      template:
+        spec:
+          schedulerName: kai-scheduler
+          containers:
+            - name: pytorch
+              image: kubeflow/pytorch-elastic-example-imagenet:latest
+              imagePullPolicy: IfNotPresent
+              resources:
+                requests:
+                  cpu: 4
+              env:
+                - name: LOGLEVEL
+                  value: DEBUG
+              command:
+                - python
+                - -m
+                - torch.distributed.run
+                - /workspace/examples/imagenet.py
+                - "--arch=resnet18"
+                - "--epochs=1"
+                - "--batch-size=32"
+                - "--workers=0"
+                - "/workspace/data/tiny-imagenet-200"

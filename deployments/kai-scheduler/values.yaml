@@ -1,0 +1,56 @@
+# Copyright 2025 NVIDIA CORPORATION
+# SPDX-License-Identifier: Apache-2.0
+
+global:
+  registry: nvcr.io/nvstaging/runai
+  securityContext: {}
+  imagePullSecrets: []
+  gpuSharing: false
+
+
+podgrouper:
+  image:
+    name: podgrouper
+    pullPolicy: IfNotPresent
+  args: []
+  resources:
+    limits:
+      cpu: "500m"
+      memory: "256Mi"
+    requests:
+      cpu: "250m"
+      memory: "128Mi"
+
+binder:
+  name: binder
+  replicas: 1
+  image:
+    name: binder
+    pullPolicy: IfNotPresent
+  resourceReservationImage:
+    name: resourcereservation
+  certSecretName: binder-webhook-tls-secret
+  additionalArgs: []
+  ports:
+    webhookPort: 9443
+    metricsPort: 8080
+    probePort: 8081
+  resources:
+    limits:
+      cpu: "500m"
+      memory: "256Mi"
+    requests:
+      cpu: "250m"
+      memory: "128Mi"
+
+webhookmanager:
+  image:
+    name: webhookmanager
+    pullPolicy: IfNotPresent
+  resources:
+    limits:
+      cpu: "500m"
+      memory: "256Mi"
+    requests:
+      cpu: "250m"
+      memory: "128Mi"

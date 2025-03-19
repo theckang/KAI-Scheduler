@@ -1,0 +1,41 @@
+# Copyright 2025 NVIDIA CORPORATION
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: "kubeflow.org/v1"
+kind: PyTorchJob
+metadata:
+  name: pytorch-example
+  labels:
+    runai/queue: test
+spec:
+  pytorchReplicaSpecs:
+    Master:
+      replicas: 1
+      restartPolicy: OnFailure
+      template:
+        spec:
+          schedulerName: kai-scheduler
+          containers:
+            - args:
+                - --backend
+                - gloo
+              image: gcr.io/kubeflow-ci/pytorch-dist-mnist-test:v1.0
+              name: pytorch
+              resources:
+                limits:
+                  nvidia.com/gpu: "1"
+    Worker:
+      replicas: 2
+      restartPolicy: OnFailure
+      template:
+        spec:
+          schedulerName: kai-scheduler
+          containers:
+            - args:
+                - --backend
+                - gloo
+              image: gcr.io/kubeflow-ci/pytorch-dist-mnist-test:v1.0
+              name: pytorch
+              resources:
+                limits:
+                  nvidia.com/gpu: "1"

@@ -1,0 +1,112 @@
+// Copyright 2025 NVIDIA CORPORATION
+// SPDX-License-Identifier: Apache-2.0
+
+package framework
+
+import (
+	"github.com/NVIDIA/KAI-scheduler/pkg/scheduler/api/eviction_info"
+	"github.com/NVIDIA/KAI-scheduler/pkg/scheduler/api/node_info"
+	"github.com/NVIDIA/KAI-scheduler/pkg/scheduler/api/pod_info"
+	"github.com/NVIDIA/KAI-scheduler/pkg/scheduler/api/pod_status"
+)
+
+const (
+	// Evict op
+	evict = "evict"
+	// Pipeline op
+	pipeline = "pipeline"
+	// Allocate op
+	allocate = "allocate"
+	// Undo op
+	undo = "undo"
+)
+
+type Operation interface {
+	Name() string
+	TaskInfo() *pod_info.PodInfo
+	Reverse() error
+}
+
+type ReverseOperation func() error
+
+type evictOperation struct {
+	taskInfo          *pod_info.PodInfo
+	previousStatus    pod_status.PodStatus
+	previousNode      *node_info.NodeInfo
+	previousGpuGroups []string
+	message           string
+	evictionMetadata  eviction_info.EvictionMetadata
+	reverseOperation  ReverseOperation
+}
+
+func (op evictOperation) Name() string {
+	return evict
+}
+
+func (op evictOperation) TaskInfo() *pod_info.PodInfo {
+	return op.taskInfo
+}
+
+func (op evictOperation) Reverse() error {
+	return op.reverseOperation()
+}
+
+type allocateOperation struct {
+	taskInfo         *pod_info.PodInfo
+	nextNode         string
+	reverseOperation ReverseOperation
+}
+
+func (op allocateOperation) Name() string {
+	return allocate
+}
+
+func (op allocateOperation) TaskInfo() *pod_info.PodInfo {
+	return op.taskInfo
+}
+
+func (op allocateOperation) Reverse() error {
+	return op.reverseOperation()
+}
+
+type pipelineOperation struct {
+	taskInfo          *pod_info.PodInfo
+	previousStatus    pod_status.PodStatus
+	previousNode      string
+	previousGpuGroups []string
+	nextNode          string
+	message           string
+	reverseOperation  ReverseOperation
+}
+
+func (op pipelineOperation) Name() string {
+	return pipeline
+}
+
+func (op pipelineOperation) TaskInfo() *pod_info.PodInfo {
+	return op.taskInfo
+}
+
+func (op pipelineOperation) Reverse() error {
+	return op.reverseOperation()
+}
+
+type undoOperation struct {
+	operationIndex   int
+	reverseOperation ReverseOperation
+}
+
+func (op undoOperation) Name() string {
+	return undo
+}
+
+func (op undoOperation) TaskInfo() *pod_info.PodInfo {
+	return &pod_info.PodInfo{
+		UID: "",
+		Job: "",
+	}
+}
+
+func (op undoOperation) Reverse() error {
+	return op.reverseOperation()
+}
