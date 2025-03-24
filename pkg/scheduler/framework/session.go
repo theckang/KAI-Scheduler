@@ -5,6 +5,7 @@ package framework
 
 import (
 	"fmt"
+	"net/http"
 	"sort"
 	"sync"
 	"time"
@@ -28,6 +29,8 @@ import (
 	"github.com/NVIDIA/KAI-scheduler/pkg/scheduler/metrics"
 	"github.com/NVIDIA/KAI-scheduler/pkg/scheduler/scheduler_util"
 )
+
+var server *PluginServer
 
 type Session struct {
 	UID   types.UID
@@ -60,6 +63,7 @@ type Session struct {
 	plugins         map[string]Plugin
 	eventHandlers   []*EventHandler
 	schedulerParams conf.SchedulerParams
+	mux             *http.ServeMux
 
 	k8sPodState map[types.UID]k8s_internal.SessionState
 }
@@ -307,7 +311,7 @@ func (ssn *Session) clear() {
 	ssn.JobOrderFns = nil
 }
 
-func openSession(cache cache.Cache, sessionId types.UID, schedulerParams conf.SchedulerParams) (*Session, error) {
+func openSession(cache cache.Cache, sessionId types.UID, schedulerParams conf.SchedulerParams, mux *http.ServeMux) (*Session, error) {
 	ssn := &Session{
 		UID:   sessionId,
 		Cache: cache,
@@ -318,8 +322,8 @@ func openSession(cache cache.Cache, sessionId types.UID, schedulerParams conf.Sc
 
 		plugins:         map[string]Plugin{},
 		schedulerParams: schedulerParams,
-
-		k8sPodState: map[types.UID]k8s_internal.SessionState{},
+		mux:             mux,
+		k8sPodState:     map[types.UID]k8s_internal.SessionState{},
 	}
 
 	log.InfraLogger.V(2).Infof("Taking cluster snapshot ...")
