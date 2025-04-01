@@ -12,12 +12,14 @@ GOBIN=${GOPATH}/bin
 
 kind create cluster --config ${KIND_CONFIG} --name $CLUSTER_NAME
 
-# Add relevant helm repository
+# Add necessary helm repos
+helm repo add fake-gpu https://runai.jfrog.io/artifactory/api/helm/fake-gpu-operator-charts-prod
 helm repo add nvidia https://helm.ngc.nvidia.com/nvidia/k8s
 helm repo update
 
 # Install the fake-gpu-operator to provide a fake GPU resources for the e2e tests
-helm upgrade -i gpu-operator fake-gpu-operator/fake-gpu-operator --namespace gpu-operator --create-namespace --version 0.0.53 --set topology.nodePools.default.gpuCount=8
+helm upgrade -i gpu-operator fake-gpu/fake-gpu-operator --namespace gpu-operator --create-namespace --version 0.0.53 --set topology.nodePools.default.gpuCount=8
+sleep 10 # Wait for the fake-gpu-operator to start
 
 # install third party operators to check the compatibility with the kai-scheduler
 ${REPO_ROOT}/hack/third_party_integrations/deploy_ray.sh
