@@ -7,6 +7,8 @@ package wait
 import (
 	"context"
 	"fmt"
+	"slices"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	appsv1 "k8s.io/api/apps/v1"
@@ -76,6 +78,63 @@ func WaitForDeploymentPodsRunning(ctx context.Context, client runtimeClient.With
 	if !watcher.ForEvent(ctx, client, pw) {
 		Fail(fmt.Sprintf("timed out waiting for pods of deployment %s/%s to be running", namespace, name))
 	}
+}
+
+func ForRolloutRestartDeployment(ctx context.Context, client runtimeClient.WithWatch, namespace, name string) error {
+	// Get the orgDeployment
+	orgDeployment := &appsv1.Deployment{}
+	err := client.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, orgDeployment)
+	if err != nil {
+		Fail(fmt.Sprintf("failed to get deployment %s/%s: %v", namespace, name, err))
+	}
+	orgPods := &v1.PodList{}
+	err = client.List(ctx, orgPods, runtimeClient.InNamespace(namespace), runtimeClient.MatchingLabels(orgDeployment.Spec.Selector.MatchLabels))
+	if err != nil {
+		Fail(fmt.Sprintf("failed to get pods of deployment %s/%s: %v", namespace, name, err))
+	}
+
+	// Create a copy for patching
+	deployment := orgDeployment.DeepCopy()
+
+	// Add or update the restartedAt annotation
+	if deployment.Spec.Template.ObjectMeta.Annotations == nil {
+		deployment.Spec.Template.ObjectMeta.Annotations = make(map[string]string)
+	}
+	deployment.Spec.Template.ObjectMeta.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
+
+	// Create and apply the patch
+	patch := runtimeClient.MergeFrom(orgDeployment)
+	err = client.Patch(ctx, deployment, patch)
+	if err != nil {
+		return fmt.Errorf("failed to patch deployment %s: %w", name, err)
+	}
+
+	waitForDeploymentPodsToBeDeleted(ctx, client, orgPods, deployment)
+	WaitForDeploymentPodsRunning(ctx, client, name, namespace)
+
+	return nil
+}
+
+func waitForDeploymentPodsToBeDeleted(ctx context.Context, client runtimeClient.WithWatch, orgPods *v1.PodList,
+	deployment *appsv1.Deployment) {
+	orgPodUIDs := []types.UID{}
+	for _, pod := range orgPods.Items {
+		orgPodUIDs = append(orgPodUIDs, pod.UID)
+	}
+
+	ForPodsWithCondition(ctx, client, func(event watch.Event) bool {
+		podList, ok := event.Object.(*v1.PodList)
+		if !ok {
+			return false
+		}
+		for _, pod := range podList.Items {
+			if slices.Contains(orgPodUIDs, pod.UID) {
+				return false
+			}
+		}
+		return true
+	}, runtimeClient.InNamespace(deployment.Namespace),
+		runtimeClient.MatchingLabels(deployment.Spec.Selector.MatchLabels))
 }
 
 func patchDeploymentArgs(
