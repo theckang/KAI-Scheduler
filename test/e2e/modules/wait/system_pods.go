@@ -58,12 +58,10 @@ func PatchSystemDeploymentFeatureFlags(
 	containerName string,
 	featureFlagsUpdater ArgsUpdater,
 ) error {
-
 	err := patchDeploymentArgs(ctx, kubeClientset, namespace, deploymentName, containerName, featureFlagsUpdater)
 	if err != nil {
 		return fmt.Errorf("failed to patch deployment %s: %w", deploymentName, err)
 	}
 	WaitForDeploymentPodsRunning(ctx, controllerClient, deploymentName, namespace)
-
 	return nil
 }
