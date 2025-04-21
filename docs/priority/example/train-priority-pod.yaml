@@ -9,11 +9,15 @@ metadata:
     runai/queue: test
     priorityClassName: train
 spec:
+  tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
   schedulerName: kai-scheduler
   containers:
-    - name: main
-      image: ubuntu
-      args: ["sleep", "infinity"]
+    - name: sleep
+      image: busybox
+      args: ["sh","-c","sleep infinity"]
       resources:
         limits:
           nvidia.com/gpu: "1"

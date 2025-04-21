@@ -14,6 +14,10 @@ spec:
       restartPolicy: OnFailure
       template:
         spec:
+          tolerations:
+          - key: "nvidia.com/gpu"
+            operator: "Exists"
+            effect: "NoSchedule"
           schedulerName: kai-scheduler
           containers:
             - name: pytorch
@@ -28,6 +32,10 @@ spec:
       restartPolicy: OnFailure
       template:
         spec:
+          tolerations:
+          - key: "nvidia.com/gpu"
+            operator: "Exists"
+            effect: "NoSchedule"
           schedulerName: kai-scheduler
           containers:
             - name: pytorch

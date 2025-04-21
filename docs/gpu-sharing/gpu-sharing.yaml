@@ -10,8 +10,12 @@ metadata:
   annotations:
     gpu-fraction: "0.5"
 spec:
+  tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
   schedulerName: kai-scheduler
   containers:
-    - name: ubuntu
-      image: ubuntu
-      args: ["sleep", "infinity"]
+    - name: sleep
+      image: busybox
+      args: ["sh","-c","sleep infinity"]
